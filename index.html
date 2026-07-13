@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Inventario por PO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1B1D21;
+    --surface:#24272C;
+    --surface-2:#2C3037;
+    --border:#3A3F47;
+    --text:#ECEAE4;
+    --text-dim:#9AA0A8;
+    --accent:#FF6A1A;
+    --accent-dark:#CC5514;
+    --accent-2:#3E7CB1;
+    --success:#59A96A;
+    --danger:#E2544B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:560px;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    background:var(--bg);
+    position:relative;
+  }
+  header.top{
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--border);
+    position:sticky;
+    top:0;
+    background:var(--bg);
+    z-index:20;
+  }
+  header.top h1{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:800;
+    font-size:26px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    margin:0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  header.top h1 .dot{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--accent);
+    display:inline-block;
+  }
+  header.top .sync{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    margin-top:4px;
+    letter-spacing:.3px;
+  }
+  main{
+    flex:1;
+    padding:16px 16px 100px;
+    overflow-y:auto;
+  }
+  .hidden{display:none !important;}
+
+  /* --- Form elements --- */
+  label.field-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    display:block;
+    margin-bottom:6px;
+  }
+  .field{margin-bottom:16px;}
+  input[type=text], input[type=number]{
+    width:100%;
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:18px;
+    padding:14px 12px;
+    border-radius:6px;
+    outline:none;
+  }
+  input[type=text]:focus, input[type=number]:focus{
+    border-color:var(--accent);
+  }
+  .desc-preview{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    color:var(--text-dim);
+    margin-top:6px;
+    min-height:16px;
+  }
+  .desc-preview.match{color:var(--success);}
+  .desc-preview.new{color:var(--accent);}
+
+  .qty-row{
+    display:flex;
+    align-items:stretch;
+    gap:8px;
+  }
+  .qty-btn{
+    width:52px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-size:22px;
+    font-weight:700;
+    border-radius:6px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .qty-btn:active{background:var(--accent);border-color:var(--accent);}
+  .qty-value{
+    flex:1;
+    text-align:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:22px;
+    font-weight:700;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:6px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .primary-btn{
+    width:100%;
+    background:var(--accent);
+    color:#161719;
+    border:none;
+    padding:16px;
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:800;
+    font-size:19px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    border-radius:8px;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  .primary-btn:active{background:var(--accent-dark);}
+  .primary-btn:disabled{background:var(--surface-2);color:var(--text-dim);cursor:not-allowed;}
+  .scan-btn{
+    background:var(--accent-2);
+    color:#0d1b26;
+    margin-bottom:6px;
+  }
+  .scan-btn:active{background:#2f6595;}
+  .scan-btn:disabled{background:var(--surface-2);color:var(--text-dim);}
+  .scan-hint{
+    font-size:11px;
+    color:var(--text-dim);
+    text-align:center;
+    margin-bottom:18px;
+  }
+
+  .new-code-box{
+    background:var(--surface);
+    border:1px dashed var(--accent);
+    border-radius:6px;
+    padding:12px;
+    margin-top:10px;
+  }
+  .new-code-box label.field-label{margin-bottom:6px;}
+
+  /* --- Ticket stub (signature element) --- */
+  .stub{
+    position:relative;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:12px 14px 12px 16px;
+    margin-bottom:10px;
+    overflow:hidden;
+  }
+  .stub::before{
+    content:'';
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width:5px;
+    background:var(--accent);
+  }
+  .stub-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .stub-code{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:14px;
+    color:var(--text);
+  }
+  .stub-desc{
+    font-size:12px;
+    color:var(--text-dim);
+    margin-top:2px;
+  }
+  .stub-po{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    background:var(--accent-2);
+    color:#0d1b26;
+    padding:2px 8px;
+    border-radius:10px;
+    white-space:nowrap;
+    font-weight:600;
+  }
+  .stub-qty{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:18px;
+    color:var(--accent);
+  }
+  .stub-time{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--text-dim);
+    margin-top:4px;
+  }
+  .undo-link{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--danger);
+    background:none;
+    border:none;
+    cursor:pointer;
+    text-decoration:underline;
+    padding:0;
+    margin-top:6px;
+  }
+
+  h2.section-title{
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:22px 0 10px;
+  }
+  h2.section-title:first-child{margin-top:4px;}
+
+  /* --- Inventory list --- */
+  .search-box{margin-bottom:14px;}
+  .art-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:6px;
+    margin-bottom:8px;
+    overflow:hidden;
+  }
+  .art-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:13px 14px;
+    cursor:pointer;
+  }
+  .art-code{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;}
+  .art-desc{font-size:12px;color:var(--text-dim);margin-top:2px;}
+  .art-total{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:800;
+    font-size:22px;
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .chevron{transition:transform .15s ease;color:var(--text-dim);font-size:12px;}
+  .art-card.open .chevron{transform:rotate(90deg);}
+  .po-breakdown{
+    display:none;
+    border-top:1px solid var(--border);
+    padding:8px 14px 12px;
+  }
+  .art-card.open .po-breakdown{display:block;}
+  .po-line{
+    display:flex;
+    justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    padding:6px 0;
+    border-bottom:1px dashed var(--border);
+  }
+  .po-line:last-child{border-bottom:none;}
+  .po-line .po-tag{color:var(--accent-2);}
+  .po-line .po-qty{font-weight:700;margin-left:auto;margin-right:10px;}
+  .print-btn{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    font-size:13px;
+    padding:3px 8px;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  .print-btn:active{border-color:var(--accent);color:var(--accent);}
+  .print-all-btn{
+    background:none;
+    border:1px solid var(--accent-2);
+    color:var(--accent-2);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    padding:4px 9px;
+    border-radius:12px;
+    cursor:pointer;
+    margin-top:8px;
+  }
+
+  /* --- Close inventory bar --- */
+  .close-bar{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px 14px;
+    margin-bottom:14px;
+  }
+  .close-info{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    margin-bottom:8px;
+    line-height:1.5;
+  }
+  .secondary-btn{
+    width:100%;
+    background:none;
+    border:1px solid var(--danger);
+    color:var(--danger);
+    padding:11px;
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:.5px;
+    text-transform:uppercase;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .secondary-btn:active{background:var(--danger);color:#161719;}
+
+  /* --- Historial --- */
+  .hist-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:6px;
+    margin-bottom:8px;
+    overflow:hidden;
+  }
+  .hist-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:13px 14px;
+    cursor:pointer;
+  }
+  .hist-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.5px;text-transform:uppercase;}
+  .hist-meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .hist-body{
+    display:none;
+    border-top:1px solid var(--border);
+    padding:10px 14px 14px;
+  }
+  .hist-card.open .hist-body{display:block;}
+  .hist-card.open .chevron{transform:rotate(90deg);}
+  .hist-del{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--danger);
+    background:none;border:none;cursor:pointer;text-decoration:underline;
+    margin-top:10px;
+  }
+
+  /* --- Printable labels (hidden on screen) --- */
+  #printArea{display:none;}
+  @media print{
+    #app > *:not(#printArea){display:none !important;}
+    #printArea{display:block !important;}
+    body{background:#fff;}
+    .print-label{
+      width:3.6in;
+      padding:0.25in;
+      border:1px solid #000;
+      box-sizing:border-box;
+      page-break-after:always;
+      font-family:'IBM Plex Mono',monospace;
+      color:#000;
+    }
+    .print-label:last-child{page-break-after:auto;}
+    .print-label .pl-po{font-size:16pt;font-weight:700;}
+    .print-label .pl-item{font-size:16pt;font-weight:700;margin-top:5pt;}
+    .print-label .pl-desc{font-size:10pt;margin-top:8pt;text-transform:uppercase;}
+    .print-label .pl-count{font-size:22pt;font-weight:800;margin-top:14pt;text-align:right;}
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:40px 20px;
+    color:var(--text-dim);
+  }
+  .empty-state .big{font-family:'Barlow Condensed',sans-serif;font-size:20px;text-transform:uppercase;letter-spacing:1px;color:var(--text);margin-bottom:6px;}
+
+  /* --- Catalog --- */
+  .cat-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:10px 12px;
+    margin-bottom:8px;
+  }
+  .cat-row input{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    padding:8px;
+    border-radius:4px;
+  }
+  .cat-row input.code-in{width:118px;flex-shrink:0;}
+  .cat-row input.desc-in{flex:1;}
+  .del-btn{
+    background:none;border:none;color:var(--danger);font-size:18px;cursor:pointer;padding:4px 6px;
+  }
+  .add-cat-btn{
+    width:100%;
+    background:var(--surface-2);
+    border:1px dashed var(--border);
+    color:var(--text-dim);
+    padding:12px;
+    border-radius:6px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    cursor:pointer;
+    margin-top:4px;
+  }
+
+  /* --- Bottom nav --- */
+  nav.bottom{
+    position:sticky;
+    bottom:0;
+    display:flex;
+    background:var(--surface);
+    border-top:1px solid var(--border);
+    z-index:20;
+  }
+  nav.bottom button{
+    flex:1;
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;
+    font-size:13px;
+    letter-spacing:.5px;
+    text-transform:uppercase;
+    padding:12px 4px 10px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+  }
+  nav.bottom button.active{color:var(--accent);}
+  nav.bottom svg{width:20px;height:20px;}
+
+  .toast{
+    position:fixed;
+    bottom:78px;
+    left:50%;
+    transform:translateX(-50%) translateY(10px);
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:9px 16px;
+    border-radius:20px;
+    font-size:12px;
+    font-family:'IBM Plex Mono',monospace;
+    opacity:0;
+    transition:opacity .2s ease, transform .2s ease;
+    pointer-events:none;
+    z-index:50;
+    max-width:88%;
+    text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.err{border-color:var(--danger);color:var(--danger);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <h1><span class="dot"></span>Inventario · PO</h1>
+    <div class="sync" id="syncStatus">cargando…</div>
+  </header>
+
+  <main>
+
+    <!-- ===== TAB: REGISTRAR ===== -->
+    <section id="tab-registrar">
+      <h2 class="section-title">Registrar entrada</h2>
+
+      <button class="primary-btn scan-btn" id="scanBtn">📷 Escanear etiqueta</button>
+      <input type="file" accept="image/*" capture="environment" id="scanInput" class="hidden">
+      <div class="scan-hint" id="scanHint">Toma una foto de la etiqueta — se llenan el PO y el código solos.</div>
+
+      <div class="field">
+        <label class="field-label">Número de PO</label>
+        <input type="text" id="poInput" list="poList" placeholder="Ej. 14466 (como dice P.O en la etiqueta)" autocomplete="off">
+        <datalist id="poList"></datalist>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Código (ITEM NO.)</label>
+        <input type="text" id="codeInput" list="codeList" placeholder="Ej. 13-00124-06" autocomplete="off">
+        <datalist id="codeList"></datalist>
+        <div class="desc-preview" id="descPreview"></div>
+        <div class="new-code-box hidden" id="newCodeBox">
+          <label class="field-label">Este código es nuevo — descripción</label>
+          <input type="text" id="newDescInput" placeholder="Ej. Summit 48 T">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Cantidad</label>
+        <div class="qty-row">
+          <button class="qty-btn" id="qtyMinus">−</button>
+          <div class="qty-value" id="qtyValue">1</div>
+          <button class="qty-btn" id="qtyPlus">+</button>
+        </div>
+      </div>
+
+      <button class="primary-btn" id="addBtn">Agregar al inventario</button>
+
+      <h2 class="section-title">Últimos movimientos</h2>
+      <div id="recentList"></div>
+    </section>
+
+    <!-- ===== TAB: INVENTARIO ===== -->
+    <section id="tab-inventario" class="hidden">
+      <div class="close-bar">
+        <div class="close-info" id="closeInfo"></div>
+        <button class="secondary-btn" id="closeInvBtn">Cerrar inventario de hoy</button>
+      </div>
+      <div class="field search-box">
+        <input type="text" id="searchInput" placeholder="Buscar por código o descripción…">
+      </div>
+      <div id="invList"></div>
+    </section>
+
+    <!-- ===== TAB: CATALOGO ===== -->
+    <section id="tab-catalogo" class="hidden">
+      <div class="field search-box">
+        <input type="text" id="catSearchInput" placeholder="Buscar en catálogo…">
+      </div>
+      <div id="catList"></div>
+      <button class="add-cat-btn" id="addCatBtn">+ Agregar artículo al catálogo</button>
+    </section>
+
+    <!-- ===== TAB: HISTORIAL ===== -->
+    <section id="tab-historial" class="hidden">
+      <h2 class="section-title">Inventarios cerrados</h2>
+      <div id="histList"></div>
+    </section>
+
+  </main>
+
+  <div id="printArea"></div>
+
+  <nav class="bottom">
+    <button class="tab-btn active" data-tab="registrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Registrar
+    </button>
+    <button class="tab-btn" data-tab="inventario">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Inventario
+    </button>
+    <button class="tab-btn" data-tab="catalogo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Catálogo
+    </button>
+    <button class="tab-btn" data-tab="historial">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      Historial
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Seed catalog (from label sheet) ----------
+  const SEED_CATALOG = [
+    ["13-00124-02","Summit 48 T"],["13-00123-02","Summit 48 C"],
+    ["13-00124-03","Summit 60 T"],["13-00123-03","Summit 60 C"],
+    ["13-00124-04","Summit 72 T"],["13-00123-04","Summit 72 C"],
+    ["13-00124-05","Summit 84 T"],["13-00123-05","Summit 84 C"],
+    ["13-00124-06","Summit 96 T"],["13-00123-06","Summit 96 C"],
+    ["02-00134-02","BR 36\" 1/2"],["02-00134-03","BR 48\" 1/2"],
+    ["02-00750-01","BR 48\" Trad"],["02-00134-04","BR 60\" 1/2"],
+    ["02-00750-02","BR 60\" Trad"],["02-00134-05","BR 72\" 1/2"],
+    ["02-00750-03","BR 72\" Trad"],["02-00134-06","BR 84\" 1/2"],
+    ["02-00750-04","BR 84\" Trad"],["02-00134-07","BR 96\" 1/2"],
+    ["02-00750-05","BR 96\" Trad"],["13-00050-01","2 BR 18"],
+    ["13-00050-02","2 BR 21"],["13-00050-03","2 BR 24"],
+    ["13-00050-04","2 BR 30"],["13-00050-05","2 BR 36"],
+    ["13-00050-06","2 BR 42"],["13-00049-01","3 BR 18\""],
+    ["13-00049-02","3 BR 24"],["13-00049-03","3 BR 30"],
+    ["13-00049-05","3 BR 42"],["02-00721-01","Lava 18"],
+    ["02-00721-02","Lava 24"],["02-00721-03","Lava 30"],
+    ["02-00721-04","Lava 36"],["13-00049-04","ojo"],
+    ["13-00049-06","ojo"],["02-00746","DEXEN RECIVER"]
+  ];
+
+  // ---------- State ----------
+  let catalog = {};      // code -> description
+  let inventory = {};    // "code||po" -> qty
+  let log = [];          // [{id,code,po,qty,ts}] newest first
+  let closedInventories = []; // [{id,label,closedAt,startedAt,inventory,totalPieces}] newest first
+  let countStartedAt = Date.now();
+  let currentQty = 1;
+  let lastSnapshot = "";
+
+  const $ = id => document.getElementById(id);
+
+  // ---------- Storage helpers ----------
+  async function loadAll(){
+    try{
+      const c = await window.storage.get('catalog', false);
+      catalog = c ? JSON.parse(c.value) : null;
+    }catch(e){ catalog = null; }
+    if(!catalog){
+      catalog = {};
+      SEED_CATALOG.forEach(([code,desc]) => catalog[code]=desc);
+      await saveCatalog();
+    }
+    try{
+      const i = await window.storage.get('inventory', false);
+      inventory = i ? JSON.parse(i.value) : {};
+    }catch(e){ inventory = {}; }
+    try{
+      const l = await window.storage.get('log', false);
+      log = l ? JSON.parse(l.value) : [];
+    }catch(e){ log = []; }
+    try{
+      const ci = await window.storage.get('closedInventories', false);
+      closedInventories = ci ? JSON.parse(ci.value) : [];
+    }catch(e){ closedInventories = []; }
+    try{
+      const cs = await window.storage.get('countStartedAt', false);
+      countStartedAt = cs ? JSON.parse(cs.value) : null;
+    }catch(e){ countStartedAt = null; }
+    if(!countStartedAt){
+      countStartedAt = Date.now();
+      await saveCountStart();
+    }
+  }
+
+  async function saveClosedInventories(){
+    try{ await window.storage.set('closedInventories', JSON.stringify(closedInventories.slice(0,100)), false); }
+    catch(e){ toast('No se pudo guardar el historial', true); }
+  }
+  async function saveCountStart(){
+    try{ await window.storage.set('countStartedAt', JSON.stringify(countStartedAt), false); }
+    catch(e){ /* non critical */ }
+  }
+
+  async function saveCatalog(){
+    try{ await window.storage.set('catalog', JSON.stringify(catalog), false); }
+    catch(e){ toast('No se pudo guardar el catálogo', true); }
+  }
+  async function saveInventory(){
+    try{ await window.storage.set('inventory', JSON.stringify(inventory), false); }
+    catch(e){ toast('No se pudo guardar el inventario', true); }
+  }
+  async function saveLog(){
+    try{ await window.storage.set('log', JSON.stringify(log.slice(0,150)), false); }
+    catch(e){ /* non critical */ }
+  }
+
+  function toast(msg, isErr){
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isErr ? ' err' : '');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(()=> t.className='toast', 2200);
+  }
+
+  function fmtTime(ts){
+    const d = new Date(ts);
+    return d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit'}) + ' ' +
+           d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  }
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      ['registrar','inventario','catalogo','historial'].forEach(name=>{
+        $('tab-'+name).classList.toggle('hidden', name !== btn.dataset.tab);
+      });
+      if(btn.dataset.tab === 'inventario'){ renderInventory(); renderCloseBar(); }
+      if(btn.dataset.tab === 'catalogo') renderCatalog();
+      if(btn.dataset.tab === 'historial') renderHistorial();
+    });
+  });
+
+  // ---------- Escaneo de etiqueta (OCR) ----------
+  function loadTesseract(){
+    return new Promise((resolve, reject)=>{
+      if(window.Tesseract){ resolve(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('No se pudo cargar el lector de texto'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function parseLabelText(text){
+    const clean = text.replace(/\n/g,' ').replace(/\s+/g,' ');
+    const found = [];
+
+    const poMatch = clean.match(/P\.?\s?O\.?\s*[:\-]?\s*(\d{3,7})/i);
+    if(poMatch){
+      $('poInput').value = poMatch[1];
+      found.push('PO ' + poMatch[1]);
+    }
+
+    const itemMatch = clean.match(/ITEM\s*NO\.?\s*[:\-]?\s*([0-9]{2}\s*-\s*[0-9]{3,6}\s*-\s*[0-9]{2})/i)
+                    || clean.match(/ITEM\s*NO\.?\s*[:\-]?\s*([0-9]{2}\s*-\s*[0-9]{3,6})/i);
+    if(itemMatch){
+      const code = itemMatch[1].replace(/\s+/g,'');
+      $('codeInput').value = code;
+      $('codeInput').dispatchEvent(new Event('input'));
+      found.push('código ' + code);
+    }
+
+    const descMatch = clean.match(/DESCRIPTION\s*[:\-]?\s*(.+)$/i);
+    if(descMatch && !$('newCodeBox').classList.contains('hidden')){
+      $('newDescInput').value = descMatch[1].trim().slice(0,120);
+    }
+
+    if(found.length){
+      toast('Detectado: ' + found.join(' · ') + ' — verifica antes de agregar');
+    } else {
+      toast('No pude leer el PO ni el código, escríbelos a mano', true);
+    }
+  }
+
+  $('scanBtn').addEventListener('click', ()=> $('scanInput').click());
+
+  $('scanInput').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const btn = $('scanBtn');
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Leyendo etiqueta…';
+    btn.disabled = true;
+    $('scanHint').textContent = 'Esto puede tardar unos segundos…';
+    try{
+      await loadTesseract();
+      const { data: { text } } = await Tesseract.recognize(file, 'eng');
+      parseLabelText(text);
+    }catch(err){
+      toast('No se pudo leer la etiqueta (revisa tu conexión)', true);
+    }
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+    $('scanHint').textContent = 'Toma una foto de la etiqueta — se llenan el PO y el código solos.';
+    e.target.value = '';
+  });
+
+  // ---------- Registrar tab ----------
+  function refreshDatalists(){
+    const codeList = $('codeList');
+    codeList.innerHTML = Object.keys(catalog).sort().map(c=>`<option value="${esc(c)}">${esc(catalog[c])}</option>`).join('');
+
+    const pos = new Set();
+    Object.keys(inventory).forEach(k=> pos.add(k.split('||')[1]));
+    log.forEach(l=> pos.add(l.po));
+    const poList = $('poList');
+    poList.innerHTML = [...pos].filter(Boolean).sort().map(p=>`<option value="${esc(p)}"></option>`).join('');
+  }
+
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  $('codeInput').addEventListener('input', ()=>{
+    const code = $('codeInput').value.trim();
+    const preview = $('descPreview');
+    const box = $('newCodeBox');
+    if(!code){ preview.textContent=''; preview.className='desc-preview'; box.classList.add('hidden'); return; }
+    if(catalog[code] !== undefined){
+      preview.textContent = catalog[code];
+      preview.className = 'desc-preview match';
+      box.classList.add('hidden');
+    } else {
+      preview.textContent = 'Código nuevo — no está en el catálogo';
+      preview.className = 'desc-preview new';
+      box.classList.remove('hidden');
+    }
+  });
+
+  $('qtyMinus').addEventListener('click', ()=>{ currentQty = Math.max(1, currentQty-1); $('qtyValue').textContent = currentQty; });
+  $('qtyPlus').addEventListener('click', ()=>{ currentQty += 1; $('qtyValue').textContent = currentQty; });
+
+  $('addBtn').addEventListener('click', async ()=>{
+    const po = $('poInput').value.trim();
+    const code = $('codeInput').value.trim();
+    if(!po){ toast('Escribe el número de PO', true); $('poInput').focus(); return; }
+    if(!code){ toast('Escribe o escanea el código', true); $('codeInput').focus(); return; }
+
+    if(catalog[code] === undefined){
+      const newDesc = $('newDescInput').value.trim();
+      if(!newDesc){ toast('Escribe la descripción del artículo nuevo', true); $('newDescInput').focus(); return; }
+      catalog[code] = newDesc;
+      await saveCatalog();
+    }
+
+    const key = code + '||' + po;
+    inventory[key] = (inventory[key] || 0) + currentQty;
+    await saveInventory();
+
+    log.unshift({id: Date.now()+'-'+Math.random().toString(36).slice(2,7), code, po, qty: currentQty, ts: Date.now()});
+    await saveLog();
+
+    toast(`+${currentQty} · ${code} · PO ${po}`);
+    $('codeInput').value=''; $('descPreview').textContent=''; $('descPreview').className='desc-preview';
+    $('newCodeBox').classList.add('hidden'); $('newDescInput').value='';
+    currentQty = 1; $('qtyValue').textContent = 1;
+    $('codeInput').focus();
+
+    refreshDatalists();
+    renderRecent();
+  });
+
+  async function undoEntry(id){
+    const idx = log.findIndex(l=>l.id===id);
+    if(idx === -1) return;
+    const entry = log[idx];
+    const key = entry.code + '||' + entry.po;
+    inventory[key] = (inventory[key]||0) - entry.qty;
+    if(inventory[key] <= 0) delete inventory[key];
+    log.splice(idx,1);
+    await saveInventory();
+    await saveLog();
+    toast('Movimiento deshecho');
+    renderRecent();
+  }
+
+  function renderRecent(){
+    const box = $('recentList');
+    if(log.length === 0){
+      box.innerHTML = `<div class="empty-state"><div class="big">Sin movimientos</div>Registra tu primer artículo arriba.</div>`;
+      return;
+    }
+    box.innerHTML = log.slice(0,12).map((l,i)=>`
+      <div class="stub">
+        <div class="stub-row">
+          <div>
+            <div class="stub-code">${esc(l.code)}</div>
+            <div class="stub-desc">${esc(catalog[l.code] || 'Sin descripción')}</div>
+            <div class="stub-time">${fmtTime(l.ts)}</div>
+          </div>
+          <div style="text-align:right">
+            <span class="stub-po">PO ${esc(l.po)}</span><br>
+            <span class="stub-qty">+${l.qty}</span>
+          </div>
+        </div>
+        ${i===0 ? `<button class="undo-link" data-undo="${l.id}">deshacer</button>` : ''}
+      </div>
+    `).join('');
+    box.querySelectorAll('[data-undo]').forEach(b=>{
+      b.addEventListener('click', ()=> undoEntry(b.dataset.undo));
+    });
+  }
+
+  // ---------- Inventario tab ----------
+  function groupByCode(invObj){
+    const byCode = {};
+    Object.keys(invObj).forEach(key=>{
+      const [code, po] = key.split('||');
+      if(!byCode[code]) byCode[code] = {total:0, pos:{}};
+      byCode[code].total += invObj[key];
+      byCode[code].pos[po] = (byCode[code].pos[po]||0) + invObj[key];
+    });
+    return byCode;
+  }
+
+  function buildCardsHTML(byCode, codes){
+    return codes.map(code=>{
+      const data = byCode[code];
+      const poLines = Object.keys(data.pos).sort().map(po=>`
+        <div class="po-line">
+          <span class="po-tag">PO ${esc(po)}</span>
+          <span class="po-qty">${data.pos[po]}</span>
+          <button class="print-btn" data-code="${esc(code)}" data-po="${esc(po)}" data-qty="${data.pos[po]}">🖨️</button>
+        </div>
+      `).join('');
+      return `
+        <div class="art-card" data-code="${esc(code)}">
+          <div class="art-head">
+            <div>
+              <div class="art-code">${esc(code)}</div>
+              <div class="art-desc">${esc(catalog[code] || 'Sin descripción')}</div>
+            </div>
+            <div class="art-total">${data.total}<span class="chevron">▶</span></div>
+          </div>
+          <div class="po-breakdown">
+            ${poLines}
+            ${Object.keys(data.pos).length > 1 ? `<button class="print-all-btn" data-code="${esc(code)}">🖨️ Imprimir todas las PO de este artículo</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function attachCardHandlers(container, byCode){
+    container.querySelectorAll('.art-head').forEach(head=>{
+      head.addEventListener('click', ()=> head.parentElement.classList.toggle('open'));
+    });
+    container.querySelectorAll('.print-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        printLabels(btn.dataset.code, [[btn.dataset.po, Number(btn.dataset.qty)]]);
+      });
+    });
+    container.querySelectorAll('.print-all-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const code = btn.dataset.code;
+        const pos = Object.entries(byCode[code].pos).sort((a,b)=> a[0]<b[0]?-1:1);
+        printLabels(code, pos);
+      });
+    });
+  }
+
+  // groups: array of [po, qty] — numbering resets per PO group
+  function printLabels(code, groups){
+    const desc = catalog[code] || 'Sin descripción';
+    let html = '';
+    groups.forEach(([po, qty])=>{
+      for(let i=1;i<=qty;i++){
+        html += `<div class="print-label">
+          <div class="pl-po">P.O ${esc(po)}</div>
+          <div class="pl-item">ITEM NO. ${esc(code)}</div>
+          <div class="pl-desc">DESCRIPTION: ${esc(desc)}</div>
+          <div class="pl-count">${i} DE ${qty}</div>
+        </div>`;
+      }
+    });
+    $('printArea').innerHTML = html;
+    setTimeout(()=> window.print(), 50);
+  }
+
+  function renderCloseBar(){
+    const count = Object.keys(inventory).length;
+    const pieces = Object.values(inventory).reduce((a,b)=>a+b,0);
+    const started = new Date(countStartedAt).toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+    $('closeInfo').textContent = `Conteo actual iniciado el ${started} · ${count} artículos · ${pieces} piezas`;
+  }
+
+  $('closeInvBtn').addEventListener('click', async ()=>{
+    if(Object.keys(inventory).length === 0){ toast('El inventario actual está vacío, no hay nada que cerrar', true); return; }
+    const defaultLabel = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+    const label = prompt('Nombre para este inventario cerrado:', defaultLabel);
+    if(label === null) return;
+    const finalLabel = label.trim() || defaultLabel;
+    if(!confirm(`¿Cerrar "${finalLabel}"? Se guarda en Historial y el conteo actual se vacía para empezar uno nuevo.`)) return;
+
+    const totalPieces = Object.values(inventory).reduce((a,b)=>a+b,0);
+    closedInventories.unshift({
+      id: Date.now()+'-'+Math.random().toString(36).slice(2,6),
+      label: finalLabel,
+      closedAt: Date.now(),
+      startedAt: countStartedAt,
+      inventory: {...inventory},
+      totalPieces
+    });
+    await saveClosedInventories();
+
+    inventory = {};
+    log = [];
+    countStartedAt = Date.now();
+    await saveInventory();
+    await saveLog();
+    await saveCountStart();
+
+    toast(`Inventario "${finalLabel}" cerrado y guardado`);
+    renderInventory();
+    renderCloseBar();
+    renderRecent();
+    refreshDatalists();
+  });
+
+  function renderInventory(){
+    const q = ($('searchInput').value||'').trim().toLowerCase();
+    const box = $('invList');
+    const byCode = groupByCode(inventory);
+
+    let codes = Object.keys(byCode);
+    if(q){
+      codes = codes.filter(c => c.toLowerCase().includes(q) || (catalog[c]||'').toLowerCase().includes(q));
+    }
+    codes.sort();
+
+    if(codes.length === 0){
+      box.innerHTML = `<div class="empty-state"><div class="big">Sin resultados</div>${Object.keys(byCode).length===0 ? 'Aún no hay artículos registrados.' : 'Ningún artículo coincide con tu búsqueda.'}</div>`;
+      return;
+    }
+
+    box.innerHTML = buildCardsHTML(byCode, codes);
+    attachCardHandlers(box, byCode);
+  }
+  $('searchInput').addEventListener('input', renderInventory);
+
+  // ---------- Historial tab ----------
+  function renderHistorial(){
+    const box = $('histList');
+    if(closedInventories.length === 0){
+      box.innerHTML = `<div class="empty-state"><div class="big">Sin inventarios cerrados</div>Cuando cierres un conteo desde la pestaña Inventario, aparecerá aquí.</div>`;
+      return;
+    }
+    box.innerHTML = closedInventories.map(entry=>{
+      const closedDate = new Date(entry.closedAt).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});
+      const artCount = Object.keys(groupByCode(entry.inventory)).length;
+      return `
+        <div class="hist-card" data-id="${entry.id}">
+          <div class="hist-head">
+            <div>
+              <div class="hist-label">${esc(entry.label)}</div>
+              <div class="hist-meta">${closedDate} · ${artCount} artículos · ${entry.totalPieces} piezas</div>
+            </div>
+            <span class="chevron">▶</span>
+          </div>
+          <div class="hist-body"></div>
+        </div>
+      `;
+    }).join('');
+
+    box.querySelectorAll('.hist-card').forEach(card=>{
+      const entry = closedInventories.find(x=>x.id === card.dataset.id);
+      const body = card.querySelector('.hist-body');
+      let built = false;
+      card.querySelector('.hist-head').addEventListener('click', ()=>{
+        card.classList.toggle('open');
+        if(!built){
+          const byCode = groupByCode(entry.inventory);
+          const codes = Object.keys(byCode).sort();
+          body.innerHTML = buildCardsHTML(byCode, codes) +
+            `<button class="hist-del" data-del="${entry.id}">Eliminar este registro del historial</button>`;
+          attachCardHandlers(body, byCode);
+          body.querySelector('[data-del]').addEventListener('click', async (e)=>{
+            e.stopPropagation();
+            if(!confirm(`¿Eliminar "${entry.label}" del historial? Esta acción no se puede deshacer.`)) return;
+            closedInventories = closedInventories.filter(x=>x.id !== entry.id);
+            await saveClosedInventories();
+            toast('Registro eliminado del historial');
+            renderHistorial();
+          });
+          built = true;
+        }
+      });
+    });
+  }
+
+  // ---------- Catalogo tab ----------
+  function renderCatalog(){
+    const q = ($('catSearchInput').value||'').trim().toLowerCase();
+    const box = $('catList');
+    let codes = Object.keys(catalog);
+    if(q) codes = codes.filter(c => c.toLowerCase().includes(q) || catalog[c].toLowerCase().includes(q));
+    codes.sort();
+
+    if(codes.length===0){
+      box.innerHTML = `<div class="empty-state"><div class="big">Catálogo vacío</div>Agrega artículos con el botón de abajo.</div>`;
+      return;
+    }
+
+    box.innerHTML = codes.map(code => `
+      <div class="cat-row" data-code="${esc(code)}">
+        <input class="code-in" value="${esc(code)}" data-role="code">
+        <input class="desc-in" value="${esc(catalog[code])}" data-role="desc">
+        <button class="del-btn" data-role="del">✕</button>
+      </div>
+    `).join('');
+
+    box.querySelectorAll('.cat-row').forEach(row=>{
+      const oldCode = row.dataset.code;
+      row.querySelector('[data-role=desc]').addEventListener('change', async (e)=>{
+        catalog[oldCode] = e.target.value.trim() || catalog[oldCode];
+        await saveCatalog();
+        toast('Descripción actualizada');
+      });
+      row.querySelector('[data-role=code]').addEventListener('change', async (e)=>{
+        const newCode = e.target.value.trim();
+        if(!newCode || newCode === oldCode) { e.target.value = oldCode; return; }
+        if(catalog[newCode] !== undefined){ toast('Ese código ya existe', true); e.target.value = oldCode; return; }
+        catalog[newCode] = catalog[oldCode];
+        delete catalog[oldCode];
+        Object.keys(inventory).forEach(k=>{
+          if(k.startsWith(oldCode+'||')){
+            inventory[k.replace(oldCode+'||', newCode+'||')] = inventory[k];
+            delete inventory[k];
+          }
+        });
+        await saveCatalog(); await saveInventory();
+        toast('Código actualizado');
+        renderCatalog();
+      });
+      row.querySelector('[data-role=del]').addEventListener('click', async ()=>{
+        if(!confirm(`¿Eliminar "${oldCode}" del catálogo? (El historial de inventario no se borra)`)) return;
+        delete catalog[oldCode];
+        await saveCatalog();
+        toast('Artículo eliminado del catálogo');
+        renderCatalog();
+      });
+    });
+  }
+  $('catSearchInput').addEventListener('input', renderCatalog);
+
+  $('addCatBtn').addEventListener('click', async ()=>{
+    const code = prompt('Código del nuevo artículo:');
+    if(!code) return;
+    const c = code.trim();
+    if(!c) return;
+    if(catalog[c] !== undefined){ toast('Ese código ya existe', true); return; }
+    const desc = prompt('Descripción:') || '';
+    catalog[c] = desc.trim();
+    await saveCatalog();
+    toast('Artículo agregado al catálogo');
+    renderCatalog();
+  });
+
+  // ---------- Sync polling ----------
+  async function pollSync(){
+    try{
+      const [c,i,l,ci] = await Promise.all([
+        window.storage.get('catalog', false),
+        window.storage.get('inventory', false),
+        window.storage.get('log', false),
+        window.storage.get('closedInventories', false)
+      ]);
+      const snap = (c?c.value:'') + '|' + (i?i.value:'') + '|' + (l?l.value:'') + '|' + (ci?ci.value:'');
+      if(snap !== lastSnapshot){
+        lastSnapshot = snap;
+        catalog = c ? JSON.parse(c.value) : catalog;
+        inventory = i ? JSON.parse(i.value) : inventory;
+        log = l ? JSON.parse(l.value) : log;
+        closedInventories = ci ? JSON.parse(ci.value) : closedInventories;
+        refreshDatalists();
+        renderRecent();
+        if(!$('tab-inventario').classList.contains('hidden')){ renderInventory(); renderCloseBar(); }
+        if(!$('tab-catalogo').classList.contains('hidden')) renderCatalog();
+        if(!$('tab-historial').classList.contains('hidden')) renderHistorial();
+      }
+      $('syncStatus').textContent = 'sincronizado · ' + new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+    }catch(e){
+      $('syncStatus').textContent = 'sin conexión con el servidor de datos';
+    }
+  }
+
+  // ---------- Init ----------
+  (async function init(){
+    $('syncStatus').textContent = 'cargando…';
+    await loadAll();
+    lastSnapshot = JSON.stringify(catalog) + '|' + JSON.stringify(inventory) + '|' + JSON.stringify(log);
+    refreshDatalists();
+    renderRecent();
+    renderCloseBar();
+    $('syncStatus').textContent = 'listo';
+    setInterval(pollSync, 4000);
+  })();
+
+})();
+</script>
+</body>
+</html>
