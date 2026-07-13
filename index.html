@@ -427,6 +427,16 @@
     .print-label .pl-item{font-size:16pt;font-weight:700;margin-top:5pt;}
     .print-label .pl-desc{font-size:10pt;margin-top:8pt;text-transform:uppercase;}
     .print-label .pl-count{font-size:22pt;font-weight:800;margin-top:14pt;text-align:right;}
+
+    .print-report{font-family:'IBM Plex Mono',monospace;color:#000;padding:0.3in;}
+    .print-report h1{font-size:18pt;margin:0 0 4pt;}
+    .print-report .rep-meta{font-size:10pt;color:#333;margin-bottom:16pt;}
+    .print-report .rep-article{margin-bottom:16pt;page-break-inside:avoid;}
+    .print-report .rep-code{font-size:13pt;font-weight:700;}
+    .print-report .rep-desc{font-size:10pt;margin-bottom:6pt;}
+    .print-report table{width:100%;border-collapse:collapse;font-size:10pt;}
+    .print-report th, .print-report td{border:1px solid #000;padding:4pt 8pt;text-align:left;}
+    .print-report .rep-total-row td{font-weight:700;}
   }
 
   .empty-state{
@@ -581,6 +591,7 @@
     <section id="tab-inventario" class="hidden">
       <div class="close-bar">
         <div class="close-info" id="closeInfo"></div>
+        <button class="print-all-btn" id="fullReportBtn" style="margin-top:0;margin-bottom:10px;display:block;width:100%;text-align:center;padding:9px;">📄 Imprimir reporte completo del inventario actual</button>
         <button class="secondary-btn" id="closeInvBtn">Cerrar inventario de hoy</button>
       </div>
       <div class="field search-box">
@@ -1007,6 +1018,7 @@
           <div class="po-breakdown">
             ${poLines}
             ${Object.keys(data.pos).length > 1 ? `<button class="print-all-btn" data-code="${esc(code)}">🖨️ Imprimir todas las PO de este artículo</button>` : ''}
+            <button class="print-all-btn report-btn" data-code="${esc(code)}">📄 Imprimir reporte de este artículo</button>
           </div>
         </div>
       `;
@@ -1023,7 +1035,7 @@
         printLabels(btn.dataset.code, [[btn.dataset.po, Number(btn.dataset.qty)]]);
       });
     });
-    container.querySelectorAll('.print-all-btn').forEach(btn=>{
+    container.querySelectorAll('.print-all-btn:not(.report-btn)').forEach(btn=>{
       btn.addEventListener('click', (e)=>{
         e.stopPropagation();
         const code = btn.dataset.code;
@@ -1031,6 +1043,36 @@
         printLabels(code, pos);
       });
     });
+    container.querySelectorAll('.report-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const code = btn.dataset.code;
+        printReport(`Reporte de artículo — ${code}`, byCode, [code]);
+      });
+    });
+  }
+
+  function buildReportHTML(title, byCode, codes){
+    let html = `<div class="print-report"><h1>${esc(title)}</h1><div class="rep-meta">Impreso: ${new Date().toLocaleString('es-MX')}</div>`;
+    codes.forEach(code=>{
+      const data = byCode[code];
+      const rows = Object.keys(data.pos).sort().map(po=>`<tr><td>PO ${esc(po)}</td><td>${data.pos[po]}</td></tr>`).join('');
+      html += `<div class="rep-article">
+        <div class="rep-code">${esc(code)}</div>
+        <div class="rep-desc">${esc(catalog[code] || 'Sin descripción')}</div>
+        <table><thead><tr><th>PO</th><th>Cantidad</th></tr></thead><tbody>${rows}
+        <tr class="rep-total-row"><td>TOTAL</td><td>${data.total}</td></tr>
+        </tbody></table>
+      </div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  function printReport(title, byCode, codes){
+    if(codes.length === 0){ toast('No hay artículos para incluir en el reporte', true); return; }
+    $('printArea').innerHTML = buildReportHTML(title, byCode, codes.slice().sort());
+    setTimeout(()=> window.print(), 50);
   }
 
   // groups: array of [po, qty] — numbering resets per PO group
@@ -1057,6 +1099,11 @@
     const started = new Date(countStartedAt).toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
     $('closeInfo').textContent = `Conteo actual iniciado el ${started} · ${count} artículos · ${pieces} piezas`;
   }
+
+  $('fullReportBtn').addEventListener('click', ()=>{
+    const byCode = groupByCode(inventory);
+    printReport('Reporte de inventario actual', byCode, Object.keys(byCode));
+  });
 
   $('closeInvBtn').addEventListener('click', async ()=>{
     if(Object.keys(inventory).length === 0){ toast('El inventario actual está vacío, no hay nada que cerrar', true); return; }
@@ -1145,9 +1192,14 @@
         if(!built){
           const byCode = groupByCode(entry.inventory);
           const codes = Object.keys(byCode).sort();
-          body.innerHTML = buildCardsHTML(byCode, codes) +
+          body.innerHTML = `<button class="print-all-btn" data-fullrep="1" style="display:block;width:100%;text-align:center;padding:9px;margin-bottom:10px;">📄 Imprimir reporte completo de este conteo</button>` +
+            buildCardsHTML(byCode, codes) +
             `<button class="hist-del" data-del="${entry.id}">Eliminar este registro del historial</button>`;
           attachCardHandlers(body, byCode);
+          body.querySelector('[data-fullrep]').addEventListener('click', (e)=>{
+            e.stopPropagation();
+            printReport(`Reporte — ${entry.label}`, byCode, codes);
+          });
           body.querySelector('[data-del]').addEventListener('click', async (e)=>{
             e.stopPropagation();
             if(!confirm(`¿Eliminar "${entry.label}" del historial? Esta acción no se puede deshacer.`)) return;
