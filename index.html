@@ -570,6 +570,7 @@
 
   <div class="load-error hidden" id="loadError">
     ⚠️ No se pudo confirmar tu inventario guardado (problema de conexión). Para no arriesgar borrar información, no se guardará nada hasta reconectar.
+    <div id="loadErrorDetail" style="font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.85;margin-top:6px;"></div>
     <button id="retryLoadBtn">Reintentar ahora</button>
   </div>
 
@@ -691,13 +692,21 @@
   // de la app (que ya sabe reintentar y protegerse de fallas) no necesite cambios.
   window.storage = {
     async get(key){
-      const doc = await _db.collection(_COLLECTION).doc(key).get();
-      if(!doc.exists) throw new Error('Clave no encontrada: ' + key);
-      return { key, value: doc.data().value, shared:false };
+      try{
+        const doc = await _db.collection(_COLLECTION).doc(key).get();
+        if(!doc.exists) throw new Error('Clave no encontrada: ' + key);
+        return { key, value: doc.data().value, shared:false };
+      }catch(err){
+        throw new Error('[' + key + '] ' + (err && err.message ? err.message : String(err)));
+      }
     },
     async set(key, value){
-      await _db.collection(_COLLECTION).doc(key).set({ value });
-      return { key, value, shared:false };
+      try{
+        await _db.collection(_COLLECTION).doc(key).set({ value });
+        return { key, value, shared:false };
+      }catch(err){
+        throw new Error('[' + key + '] ' + (err && err.message ? err.message : String(err)));
+      }
     },
     async delete(key){
       await _db.collection(_COLLECTION).doc(key).delete();
@@ -755,17 +764,19 @@
   function delay(ms){ return new Promise(res=>setTimeout(res, ms)); }
 
   // Intenta leer una clave varias veces antes de darse por vencido.
-  // Devuelve {ok:true, value} si lo logró, o {ok:false} si falló en todos los intentos.
+  // Devuelve {ok:true, value} si lo logró, o {ok:false, error} si falló en todos los intentos.
   async function fetchWithRetry(key, retries=5, waitMs=500){
+    let lastErr = '';
     for(let i=0;i<retries;i++){
       try{
         const r = await window.storage.get(key, false);
         return { ok:true, value: r ? r.value : null };
       }catch(e){
+        lastErr = (e && e.message) ? e.message : String(e);
         if(i < retries-1) await delay(waitMs);
       }
     }
-    return { ok:false };
+    return { ok:false, error:lastErr };
   }
 
   async function loadAll(){
@@ -783,6 +794,7 @@
     const startRes = await fetchWithRetry('countStartedAt');
 
     const allOk = catRes.ok && invRes.ok && logRes.ok && closedRes.ok && startRes.ok;
+    const firstError = [catRes,invRes,logRes,closedRes,startRes].find(r=>!r.ok && r.error);
 
     if(allOk){
       catalog = catRes.value ? JSON.parse(catRes.value) : null;
@@ -810,7 +822,7 @@
       // esto será el estado inicial vacío de la variable, así que bloqueamos guardado
       // por completo hasta poder confirmar los datos reales).
       dataReady = false;
-      showLoadError();
+      showLoadError(firstError ? firstError.error : '');
     } else {
       // No hay evidencia de que haya datos previos: es razonable que sea primer uso.
       // Sembramos el catálogo y arrancamos vacío, pero seguimos intentando confirmar
@@ -819,12 +831,13 @@
       SEED_CATALOG.forEach(([code,desc]) => catalog[code]=desc);
       inventory = {}; log = []; closedInventories = []; countStartedAt = Date.now();
       dataReady = false;
-      showLoadError();
+      showLoadError(firstError ? firstError.error : '');
     }
   }
 
-  function showLoadError(){
+  function showLoadError(detail){
     $('loadError').classList.remove('hidden');
+    $('loadErrorDetail').textContent = detail ? ('Detalle técnico: ' + detail) : '';
     $('addBtn').disabled = true;
     $('closeInvBtn').disabled = true;
   }
