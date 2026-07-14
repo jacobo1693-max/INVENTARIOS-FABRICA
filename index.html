@@ -694,7 +694,7 @@
     async get(key){
       try{
         const doc = await _db.collection(_COLLECTION).doc(key).get();
-        if(!doc.exists) throw new Error('Clave no encontrada: ' + key);
+        if(!doc.exists) return { key, value: null, shared:false };
         return { key, value: doc.data().value, shared:false };
       }catch(err){
         throw new Error('[' + key + '] ' + (err && err.message ? err.message : String(err)));
