@@ -798,10 +798,10 @@
 
     if(allOk){
       catalog = catRes.value ? JSON.parse(catRes.value) : null;
-      inventory = invRes.value ? JSON.parse(invRes.value) : {};
-      log = logRes.value ? JSON.parse(logRes.value) : [];
-      closedInventories = closedRes.value ? JSON.parse(closedRes.value) : [];
-      countStartedAt = startRes.value ? JSON.parse(startRes.value) : Date.now();
+      inventory = invRes.value ? (JSON.parse(invRes.value) || {}) : {};
+      log = logRes.value ? (JSON.parse(logRes.value) || []) : [];
+      closedInventories = closedRes.value ? (JSON.parse(closedRes.value) || []) : [];
+      countStartedAt = startRes.value ? (JSON.parse(startRes.value) || Date.now()) : Date.now();
 
       if(!catalog){
         catalog = {};
@@ -810,6 +810,9 @@
       dataReady = true;
       hideLoadError();
       await saveCatalog();
+      await saveInventory();
+      await saveLog();
+      await saveClosedInventories();
       await saveCountStart();
       await markHasData();
       return;
@@ -1436,7 +1439,7 @@
         window.storage.get('log', false),
         window.storage.get('closedInventories', false)
       ]);
-      const snap = (c?c.value:'') + '|' + (i?i.value:'') + '|' + (l?l.value:'') + '|' + (ci?ci.value:'');
+      const snap = (c&&c.value?c.value:'') + '|' + (i&&i.value?i.value:'') + '|' + (l&&l.value?l.value:'') + '|' + (ci&&ci.value?ci.value:'');
       const wasReady = dataReady;
       if(!dataReady){
         // Se recuperó la conexión: a partir de ahora lo que venga de storage SÍ es el
@@ -1447,10 +1450,13 @@
       }
       if(snap !== lastSnapshot || !wasReady){
         lastSnapshot = snap;
-        catalog = c ? JSON.parse(c.value) : catalog;
-        inventory = i ? JSON.parse(i.value) : inventory;
-        log = l ? JSON.parse(l.value) : log;
-        closedInventories = ci ? JSON.parse(ci.value) : closedInventories;
+        // OJO: c/i/l/ci siempre son objetos (nuestro adaptador de Firebase nunca
+        // devuelve null), así que hay que revisar .value — si viene vacío significa
+        // "todavía no existe en la nube", y ahí NO se debe tocar lo que ya hay en memoria.
+        catalog = (c && c.value) ? (JSON.parse(c.value) || catalog) : catalog;
+        inventory = (i && i.value) ? (JSON.parse(i.value) || inventory) : inventory;
+        log = (l && l.value) ? (JSON.parse(l.value) || log) : log;
+        closedInventories = (ci && ci.value) ? (JSON.parse(ci.value) || closedInventories) : closedInventories;
         refreshDatalists();
         renderRecent();
         if(!$('tab-inventario').classList.contains('hidden')){ renderInventory(); renderCloseBar(); }
