@@ -670,6 +670,47 @@
   <div class="toast" id="toast"></div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script>
+  // ---------- Conexión a Firebase (reemplaza el guardado interno de Claude) ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyCx55Dha7Y4vrb0k8HkOS9BMuQfEXspbK8",
+    authDomain: "inventarios-fabrica.firebaseapp.com",
+    projectId: "inventarios-fabrica",
+    storageBucket: "inventarios-fabrica.firebasestorage.app",
+    messagingSenderId: "47233583510",
+    appId: "1:47233583510:web:ede72edb5e88a550c0f5b7",
+    measurementId: "G-9YYN0Y1MV1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const _db = firebase.firestore();
+  const _COLLECTION = 'appdata';
+
+  // Mismo "contrato" que usaba window.storage dentro de Claude, para que el resto
+  // de la app (que ya sabe reintentar y protegerse de fallas) no necesite cambios.
+  window.storage = {
+    async get(key){
+      const doc = await _db.collection(_COLLECTION).doc(key).get();
+      if(!doc.exists) throw new Error('Clave no encontrada: ' + key);
+      return { key, value: doc.data().value, shared:false };
+    },
+    async set(key, value){
+      await _db.collection(_COLLECTION).doc(key).set({ value });
+      return { key, value, shared:false };
+    },
+    async delete(key){
+      await _db.collection(_COLLECTION).doc(key).delete();
+      return { key, deleted:true, shared:false };
+    },
+    async list(prefix){
+      const snap = await _db.collection(_COLLECTION).get();
+      const keys = [];
+      snap.forEach(d => { if(!prefix || d.id.startsWith(prefix)) keys.push(d.id); });
+      return { keys };
+    }
+  };
+</script>
 <script>
 (function(){
   "use strict";
