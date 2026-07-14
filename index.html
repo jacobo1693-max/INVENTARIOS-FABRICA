@@ -71,6 +71,30 @@
     margin-top:4px;
     letter-spacing:.3px;
   }
+  .load-error{
+    background:#3A2020;
+    border-bottom:1px solid var(--danger);
+    color:#FFD6D2;
+    font-size:12px;
+    padding:10px 16px;
+    text-align:center;
+    line-height:1.5;
+    position:sticky;
+    top:0;
+    z-index:19;
+  }
+  .load-error button{
+    display:block;
+    margin:8px auto 0;
+    background:var(--danger);
+    color:#fff;
+    border:none;
+    padding:7px 16px;
+    border-radius:5px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    cursor:pointer;
+  }
   main{
     flex:1;
     padding:16px 16px 100px;
@@ -544,6 +568,11 @@
     <div class="sync" id="syncStatus">cargando…</div>
   </header>
 
+  <div class="load-error hidden" id="loadError">
+    ⚠️ No se pudo confirmar tu inventario guardado (problema de conexión). Para no arriesgar borrar información, no se guardará nada hasta reconectar.
+    <button id="retryLoadBtn">Reintentar ahora</button>
+  </div>
+
   <main>
 
     <!-- ===== TAB: REGISTRAR ===== -->
@@ -676,61 +705,123 @@
   let countStartedAt = Date.now();
   let currentQty = 1;
   let lastSnapshot = "";
+  let dataReady = false;   // true only after we've confirmed real (or safely-bootstrapped) data from storage
+  let hasEverSaved = false; // true once we know this install has saved data before ('hasData' sentinel)
 
   const $ = id => document.getElementById(id);
 
   // ---------- Storage helpers ----------
+  function delay(ms){ return new Promise(res=>setTimeout(res, ms)); }
+
+  // Intenta leer una clave varias veces antes de darse por vencido.
+  // Devuelve {ok:true, value} si lo logró, o {ok:false} si falló en todos los intentos.
+  async function fetchWithRetry(key, retries=5, waitMs=500){
+    for(let i=0;i<retries;i++){
+      try{
+        const r = await window.storage.get(key, false);
+        return { ok:true, value: r ? r.value : null };
+      }catch(e){
+        if(i < retries-1) await delay(waitMs);
+      }
+    }
+    return { ok:false };
+  }
+
   async function loadAll(){
-    try{
-      const c = await window.storage.get('catalog', false);
-      catalog = c ? JSON.parse(c.value) : null;
-    }catch(e){ catalog = null; }
-    if(!catalog){
+    // Primero revisamos un "testigo" liviano: si esta instalación YA había guardado
+    // datos antes, sabemos que cualquier falla de lectura de aquí en adelante es una
+    // falla de conexión (no "todavía no hay nada"), y por lo tanto NUNCA debemos
+    // sobrescribir con datos vacíos.
+    const sentinel = await fetchWithRetry('hasData', 3, 400);
+    hasEverSaved = sentinel.ok && sentinel.value === '1';
+
+    const catRes = await fetchWithRetry('catalog');
+    const invRes = await fetchWithRetry('inventory');
+    const logRes = await fetchWithRetry('log');
+    const closedRes = await fetchWithRetry('closedInventories');
+    const startRes = await fetchWithRetry('countStartedAt');
+
+    const allOk = catRes.ok && invRes.ok && logRes.ok && closedRes.ok && startRes.ok;
+
+    if(allOk){
+      catalog = catRes.value ? JSON.parse(catRes.value) : null;
+      inventory = invRes.value ? JSON.parse(invRes.value) : {};
+      log = logRes.value ? JSON.parse(logRes.value) : [];
+      closedInventories = closedRes.value ? JSON.parse(closedRes.value) : [];
+      countStartedAt = startRes.value ? JSON.parse(startRes.value) : Date.now();
+
+      if(!catalog){
+        catalog = {};
+        SEED_CATALOG.forEach(([code,desc]) => catalog[code]=desc);
+      }
+      dataReady = true;
+      hideLoadError();
+      await saveCatalog();
+      await saveCountStart();
+      await markHasData();
+      return;
+    }
+
+    // No se pudo confirmar el estado real de al menos una clave.
+    if(hasEverSaved){
+      // Ya sabemos que este usuario tenía datos guardados: JAMÁS asumimos vacío.
+      // Nos quedamos con lo último que hubiera en memoria (si venimos de un refresh
+      // esto será el estado inicial vacío de la variable, así que bloqueamos guardado
+      // por completo hasta poder confirmar los datos reales).
+      dataReady = false;
+      showLoadError();
+    } else {
+      // No hay evidencia de que haya datos previos: es razonable que sea primer uso.
+      // Sembramos el catálogo y arrancamos vacío, pero seguimos intentando confirmar
+      // en segundo plano antes de permitir guardar, por seguridad.
       catalog = {};
       SEED_CATALOG.forEach(([code,desc]) => catalog[code]=desc);
-      await saveCatalog();
-    }
-    try{
-      const i = await window.storage.get('inventory', false);
-      inventory = i ? JSON.parse(i.value) : {};
-    }catch(e){ inventory = {}; }
-    try{
-      const l = await window.storage.get('log', false);
-      log = l ? JSON.parse(l.value) : [];
-    }catch(e){ log = []; }
-    try{
-      const ci = await window.storage.get('closedInventories', false);
-      closedInventories = ci ? JSON.parse(ci.value) : [];
-    }catch(e){ closedInventories = []; }
-    try{
-      const cs = await window.storage.get('countStartedAt', false);
-      countStartedAt = cs ? JSON.parse(cs.value) : null;
-    }catch(e){ countStartedAt = null; }
-    if(!countStartedAt){
-      countStartedAt = Date.now();
-      await saveCountStart();
+      inventory = {}; log = []; closedInventories = []; countStartedAt = Date.now();
+      dataReady = false;
+      showLoadError();
     }
   }
 
+  function showLoadError(){
+    $('loadError').classList.remove('hidden');
+    $('addBtn').disabled = true;
+    $('closeInvBtn').disabled = true;
+  }
+  function hideLoadError(){
+    $('loadError').classList.add('hidden');
+    $('addBtn').disabled = false;
+    $('closeInvBtn').disabled = false;
+  }
+
+  async function markHasData(){
+    if(hasEverSaved) return;
+    try{ await window.storage.set('hasData', '1', false); hasEverSaved = true; }
+    catch(e){ /* se reintentará en el próximo guardado exitoso */ }
+  }
+
+  async function saveCatalog(){
+    if(!dataReady){ toast('No se guardó: sin conexión confirmada al almacenamiento', true); return; }
+    try{ await window.storage.set('catalog', JSON.stringify(catalog), false); await markHasData(); }
+    catch(e){ toast('No se pudo guardar el catálogo', true); }
+  }
+  async function saveInventory(){
+    if(!dataReady){ toast('No se guardó: sin conexión confirmada al almacenamiento', true); return; }
+    try{ await window.storage.set('inventory', JSON.stringify(inventory), false); await markHasData(); }
+    catch(e){ toast('No se pudo guardar el inventario', true); }
+  }
+  async function saveLog(){
+    if(!dataReady) return;
+    try{ await window.storage.set('log', JSON.stringify(log.slice(0,150)), false); }
+    catch(e){ /* non critical */ }
+  }
   async function saveClosedInventories(){
+    if(!dataReady){ toast('No se guardó: sin conexión confirmada al almacenamiento', true); return; }
     try{ await window.storage.set('closedInventories', JSON.stringify(closedInventories.slice(0,100)), false); }
     catch(e){ toast('No se pudo guardar el historial', true); }
   }
   async function saveCountStart(){
+    if(!dataReady) return;
     try{ await window.storage.set('countStartedAt', JSON.stringify(countStartedAt), false); }
-    catch(e){ /* non critical */ }
-  }
-
-  async function saveCatalog(){
-    try{ await window.storage.set('catalog', JSON.stringify(catalog), false); }
-    catch(e){ toast('No se pudo guardar el catálogo', true); }
-  }
-  async function saveInventory(){
-    try{ await window.storage.set('inventory', JSON.stringify(inventory), false); }
-    catch(e){ toast('No se pudo guardar el inventario', true); }
-  }
-  async function saveLog(){
-    try{ await window.storage.set('log', JSON.stringify(log.slice(0,150)), false); }
     catch(e){ /* non critical */ }
   }
 
@@ -1292,7 +1383,15 @@
         window.storage.get('closedInventories', false)
       ]);
       const snap = (c?c.value:'') + '|' + (i?i.value:'') + '|' + (l?l.value:'') + '|' + (ci?ci.value:'');
-      if(snap !== lastSnapshot){
+      const wasReady = dataReady;
+      if(!dataReady){
+        // Se recuperó la conexión: a partir de ahora lo que venga de storage SÍ es el
+        // estado real, así que confiamos en él y volvemos a permitir guardar.
+        dataReady = true;
+        hasEverSaved = true;
+        hideLoadError();
+      }
+      if(snap !== lastSnapshot || !wasReady){
         lastSnapshot = snap;
         catalog = c ? JSON.parse(c.value) : catalog;
         inventory = i ? JSON.parse(i.value) : inventory;
@@ -1303,22 +1402,40 @@
         if(!$('tab-inventario').classList.contains('hidden')){ renderInventory(); renderCloseBar(); }
         if(!$('tab-catalogo').classList.contains('hidden')) renderCatalog();
         if(!$('tab-historial').classList.contains('hidden')) renderHistorial();
+        if(!wasReady) toast('Conexión recuperada — tus datos guardados están al día');
       }
       $('syncStatus').textContent = 'sincronizado · ' + new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
     }catch(e){
       $('syncStatus').textContent = 'sin conexión con el servidor de datos';
+      if(dataReady){
+        // Perdimos la conexión después de haber cargado bien: nos ponemos en modo
+        // seguro para no arriesgar un guardado con datos desactualizados.
+      }
     }
   }
+
+  $('retryLoadBtn').addEventListener('click', async ()=>{
+    $('retryLoadBtn').textContent = 'Reintentando…';
+    await loadAll();
+    refreshDatalists();
+    renderRecent();
+    renderCloseBar();
+    if(!$('tab-inventario').classList.contains('hidden')) renderInventory();
+    if(!$('tab-catalogo').classList.contains('hidden')) renderCatalog();
+    if(!$('tab-historial').classList.contains('hidden')) renderHistorial();
+    $('retryLoadBtn').textContent = 'Reintentar ahora';
+    if(dataReady) toast('Datos confirmados correctamente');
+  });
 
   // ---------- Init ----------
   (async function init(){
     $('syncStatus').textContent = 'cargando…';
     await loadAll();
-    lastSnapshot = JSON.stringify(catalog) + '|' + JSON.stringify(inventory) + '|' + JSON.stringify(log);
+    lastSnapshot = JSON.stringify(catalog) + '|' + JSON.stringify(inventory) + '|' + JSON.stringify(log) + '|' + JSON.stringify(closedInventories);
     refreshDatalists();
     renderRecent();
     renderCloseBar();
-    $('syncStatus').textContent = 'listo';
+    $('syncStatus').textContent = dataReady ? 'listo' : 'sin confirmar — revisa tu conexión';
     setInterval(pollSync, 4000);
   })();
 
